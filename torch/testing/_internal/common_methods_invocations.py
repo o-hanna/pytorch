@@ -12397,8 +12397,6 @@ op_db: List[OpInfo] = [
                             device_type='mps', dtypes=[torch.float32]),
                DecorateInfo(unittest.skip("Skipped!"), 'TestJit', 'test_variant_consistency_jit',
                             device_type='mps', dtypes=[torch.float32]),
-               # Could not run 'aten::linalg_eigh' with arguments from the 'AutogradMeta' backend.
-               DecorateInfo(unittest.expectedFailure, 'TestFakeTensorNonErroring', 'test_fake'),
            )),
     OpInfo('linalg.eigvalsh',
            aten_name='linalg_eigvalsh',
@@ -20269,8 +20267,6 @@ python_ref_db = [
         "_refs.nn.functional.relu",
         torch_opinfo_name="nn.functional.relu",
         decorators=(
-            # Need FakeTensor support for meta coverage
-            DecorateInfo(unittest.expectedFailure, 'TestCommon', 'test_python_ref_meta',),
             # RuntimeError: Tracing expected 2 arguments but got 1 concrete arguments
             DecorateInfo(unittest.expectedFailure, 'TestCommon', 'test_python_ref_executor'),
         ),
