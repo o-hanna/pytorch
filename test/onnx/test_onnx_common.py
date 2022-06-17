@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import unittest
+from typing import Any, Mapping, Type
 
 import numpy as np
 import onnxruntime
@@ -31,11 +32,16 @@ pytorch_operator_dir = os.path.join(onnx_model_dir, "pytorch-operator")
 _ORT_PROVIDERS = ("CPUExecutionProvider",)
 
 
-def _run_model_test(test_suite: _TestONNXRuntime, *args, **kwargs):
+def run_model_test(test_suite: _TestONNXRuntime, *args, **kwargs):
     kwargs["ort_providers"] = _ORT_PROVIDERS
     kwargs["opset_version"] = test_suite.opset_version
     kwargs["keep_initializers_as_inputs"] = test_suite.keep_initializers_as_inputs
     return verification.verify(*args, **kwargs)
+
+
+def parameterize_class_name(cls: Type, idx: int, input_dicts: Mapping[Any, Any]):
+    suffix = "_".join(f"{k}_{v}" for k, v in input_dicts.items())
+    return f"{cls.__name__}_{suffix}"
 
 
 class _TestONNXRuntime(unittest.TestCase):
@@ -74,7 +80,7 @@ class _TestONNXRuntime(unittest.TestCase):
         verbose=False,
     ):
         def _run_test(m, remained_onnx_input_idx, flatten=True):
-            return _run_model_test(
+            return run_model_test(
                 self,
                 m,
                 input_args=input_args,
