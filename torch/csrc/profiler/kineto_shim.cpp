@@ -60,30 +60,9 @@ TraceWrapper::TraceWrapper(const int64_t start_time, const std::string& name)
 }
 #endif // USE_KINETO
 
-#ifdef USE_KINETO
-namespace {
-libkineto::ActivityType toActivityType(const KinetoActivityType type) {
-  switch (type) {
-    case KinetoActivityType::CPU_OP:
-      return libkineto::ActivityType::CPU_OP;
-    case KinetoActivityType::CPU_INSTANT_EVENT:
-      return libkineto::ActivityType::CPU_INSTANT_EVENT;
-    case KinetoActivityType::PYTHON_FUNCTION:
-      return libkineto::ActivityType::PYTHON_FUNCTION;
-    default:
-      TORCH_INTERNAL_ASSERT(
-          type == KinetoActivityType::USER_ANNOTATION,
-          "Invalid KinetoActivityType: ",
-          (int)type);
-      return libkineto::ActivityType::USER_ANNOTATION;
-  }
-}
-} // namespace
-#endif // USE_KINETO
-
 void TraceWrapper::addCPUActivity(
     const std::string& name,
-    const KinetoActivityType kineto_type,
+    const libkineto::ActivityType kineto_type,
     const DeviceAndResource device_and_resource,
     const uint64_t correlation_id,
     const int64_t start_time,
@@ -91,14 +70,13 @@ void TraceWrapper::addCPUActivity(
     const annotation_t& annotations) {
 #ifdef USE_KINETO
   TORCH_CHECK((bool)(*this), "Cannot add event to non-existent trace.");
-  auto type = toActivityType(kineto_type);
-  cpu_trace_->emplace_activity(cpu_trace_->span, type, name);
+  cpu_trace_->emplace_activity(cpu_trace_->span, kineto_type, name);
   auto& act = libkineto::CpuTraceBuffer::toRef(cpu_trace_->activities.back());
   act.device = device_and_resource.device;
   act.resource = device_and_resource.resource;
   act.id = correlation_id;
   act.startTime = start_time;
-  if (type != libkineto::ActivityType::CPU_INSTANT_EVENT) {
+  if (kineto_type != libkineto::ActivityType::CPU_INSTANT_EVENT) {
     act.endTime = end_time;
   }
   for (const auto& i : annotations) {
@@ -122,24 +100,13 @@ TraceWrapper::operator bool() const {
 #endif // USE_KINETO
 }
 
-ActivityTraceWrapper::ActivityTraceWrapper(
-    std::unique_ptr<interface_trace_t> trace)
-    : trace_(std::move(trace)), saved_{false} {}
-
-ActivityTraceWrapper::operator bool() const {
+void saveTrace(
+    const std::string& path,
+    std::unique_ptr<interface_trace_t>&& trace) {
 #ifdef USE_KINETO
-  return trace_ != nullptr;
-#else
-  return false;
-#endif // USE_KINETO
-}
-
-void ActivityTraceWrapper::save(const std::string& path) {
-#ifdef USE_KINETO
-  TORCH_CHECK(!saved_, "Trace is already saved.");
-  TORCH_CHECK(trace_ != nullptr, "Missing trace.")
-  trace_->save(path);
-  saved_ = true;
+  TORCH_CHECK(trace, "Missing trace. (Already saved?)")
+  trace->save(path);
+  trace.reset();
 #else
   TORCH_CHECK(
       false,
@@ -244,14 +211,14 @@ void startTrace() {
 #endif // USE_KINETO
 }
 
-ActivityTraceWrapper stopTrace() {
-  return ActivityTraceWrapper{
+std::unique_ptr<interface_trace_t> stopTrace() {
+  return
 #ifdef USE_KINETO
       libkineto::api().activityProfiler().stopTrace()
 #else
-      std::make_unique<interface_trace_t>()
+      nullptr
 #endif // USE_KINETO
-  };
+          ;
 }
 
 void pushCorrelationId(uint64_t correlation_id) {
@@ -290,7 +257,6 @@ void recordThreadInfo() {
 
 namespace autograd {
 namespace profiler {
-#ifdef USE_KINETO
 c10::DeviceType deviceTypeFromActivity(libkineto::ActivityType activity_type) {
   // fallthrough
   switch (activity_type) {
@@ -315,7 +281,6 @@ c10::DeviceType deviceTypeFromActivity(libkineto::ActivityType activity_type) {
     }
   }
 }
-#endif // USE_KINETO
 
 void addMetadataJson(const std::string& key, const std::string& value) {
 #ifdef USE_KINETO
